@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARIA - AI Voice Assistant</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background: #0a0a0f;
+    color: #e8e8f0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    overflow-x: hidden;
+  }
+
+  .app-header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  .app-title {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    color: #e8e8f0;
+    margin-bottom: 4px;
+  }
+
+  .app-subtitle {
+    font-size: 13px;
+    color: #6b6b88;
+    font-weight: 400;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #141420;
+    border: 1px solid #2a2a3e;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #6b6b88;
+    margin-top: 10px;
+    transition: all 0.3s;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #3d3d55;
+    transition: all 0.3s;
+  }
+
+  .status-pill.listening { color: #a78bfa; border-color: #4c1d95; }
+  .status-pill.listening .status-dot { background: #a78bfa; box-shadow: 0 0 8px #a78bfa; animation: pulse 1s infinite; }
+  .status-pill.speaking { color: #34d399; border-color: #065f46; }
+  .status-pill.speaking .status-dot { background: #34d399; box-shadow: 0 0 8px #34d399; animation: pulse 1s infinite; }
+  .status-pill.thinking { color: #60a5fa; border-color: #1e3a5f; }
+  .status-pill.thinking .status-dot { background: #60a5fa; animation: pulse 0.5s infinite; }
+  .status-pill.error { color: #f87171; border-color: #7f1d1d; }
+  .status-pill.error .status-dot { background: #f87171; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ── Orb ── */
+  .orb-container {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    margin: 24px auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .orb-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    transition: all 0.4s;
+  }
+
+  .ring-1 { width: 200px; height: 200px; border-color: #1e1e30; }
+  .ring-2 { width: 162px; height: 162px; border-color: #252535; }
+  .ring-3 { width: 124px; height: 124px; border-color: #2f2f45; }
+
+  .orb-btn {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: #1a1a28;
+    border: 2px solid #3a3a55;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    transition: all 0.2s;
+    position: relative;
+    z-index: 1;
+    user-select: none;
+  }
+
+  .orb-btn:hover { background: #222238; border-color: #6d5cde; transform: scale(1.05); }
+  .orb-btn:active { transform: scale(0.97); }
+
+  .orb-btn.active {
+    background: #1a1030;
+    border-color: #a78bfa;
+    box-shadow: 0 0 30px rgba(167,139,250,0.3);
+  }
+
+  .orb-container.active .ring-1 { border-color: rgba(167,139,250,0.2); animation: spin 8s linear infinite; }
+  .orb-container.active .ring-2 { border-color: rgba(167,139,250,0.15); animation: spin 6s linear infinite reverse; }
+  .orb-container.active .ring-3 { border-color: rgba(167,139,250,0.1); animation: spin 10s linear infinite; }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* ── Waveform ── */
+  .waveform {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 36px;
+    margin: 8px auto 24px;
+  }
+
+  .wave-bar {
+    width: 3px;
+    background: #3d3d55;
+    border-radius: 2px;
+    height: 4px;
+    transition: height 0.1s ease;
+  }
+
+  .wave-bar.active { background: #a78bfa; }
+
+  /* ── Boxes ── */
+  .section-label {
+    font-size: 11px;
+    color: #3d3d55;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+    font-weight: 500;
+    width: 100%;
+    max-width: 600px;
+  }
+
+  .transcript-box {
+    width: 100%;
+    max-width: 600px;
+    background: #111120;
+    border: 1px solid #1e1e30;
+    border-radius: 12px;
+    padding: 14px 16px;
+    min-height: 56px;
+    margin-bottom: 12px;
+    font-size: 15px;
+    font-weight: 300;
+    color: #9898b8;
+    line-height: 1.5;
+    font-style: italic;
+    transition: all 0.3s;
+  }
+
+  .transcript-box.active {
+    color: #e8e8f0;
+    font-style: normal;
+    border-color: #2a2a3e;
+  }
+
+  .response-box {
+    width: 100%;
+    max-width: 600px;
+    background: #0d1a2e;
+    border: 1px solid #1a2e48;
+    border-radius: 12px;
+    padding: 14px 16px;
+    min-height: 56px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    color: #8ab4d4;
+    line-height: 1.6;
+    display: none;
+  }
+
+  .response-box.visible { display: block; }
+
+  /* ── API Key ── */
+  .api-key-section {
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 16px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .api-key-input {
+    flex: 1;
+    background: #111120;
+    border: 1px solid #1e1e30;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #e8e8f0;
+    font-family: 'JetBrains Mono', monospace;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .api-key-input:focus { border-color: #3a3a55; }
+  .api-key-input::placeholder { color: #3a3a55; }
+
+  .save-key-btn {
+    background: #1a1a2e;
+    border: 1px solid #2a2a40;
+    border-radius: 8px;
+    padding: 10px 18px;
+    color: #a78bfa;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  .save-key-btn:hover { background: #222238; border-color: #a78bfa; }
+
+  /* ── Commands Grid ── */
+  .commands-grid {
+    width: 100%;
+    max-width: 600px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .cmd-chip {
+    background: #111120;
+    border: 1px solid #1e1e30;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #6b6b88;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .cmd-chip:hover { border-color: #3a3a55; color: #a0a0c0; background: #141424; }
+  .cmd-chip span { font-size: 16px; }
+
+  /* ── Action Log ── */
+  .action-log {
+    width: 100%;
+    max-width: 600px;
+    background: #0a0f1a;
+    border: 1px solid #1a2030;
+    border-radius: 10px;
+    padding: 12px;
+    max-height: 160px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    margin-bottom: 20px;
+  }
+
+  .log-entry {
+    color: #4a5a6a;
+    padding: 3px 0;
+    border-bottom: 1px solid #141a24;
+  }
+
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry .ts { color: #2a4a3a; margin-right: 8px; }
+  .log-entry.success { color: #2a7a5a; }
+  .log-entry.action { color: #3a5a8a; }
+  .log-entry.error { color: #7a3a3a; }
+
+  .hint {
+    font-size: 11px;
+    color: #3a3a55;
+    text-align: center;
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    padding-bottom: 32px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="app-header">
+  <div class="app-title">🎙 ARIA</div>
+  <div class="app-subtitle">AI Voice Assistant · Powered by Claude</div>
+  <div class="status-pill" id="statusPill">
+    <div class="status-dot"></div>
+    <span id="statusText">ready</span>
+  </div>
+</div>
+
+<!-- ── API Key ── -->
+<div class="section-label">Anthropic API Key</div>
+<div class="api-key-section">
+  <input class="api-key-input" id="apiKeyInput" type="password" placeholder="sk-ant-api03-..." />
+  <button class="save-key-btn" onclick="saveKey()">Save</button>
+</div>
+
+<!-- ── Orb ── -->
+<div class="orb-container" id="orbContainer">
+  <div class="orb-ring ring-1"></div>
+  <div class="orb-ring ring-2"></div>
+  <div class="orb-ring ring-3"></div>
+  <button class="orb-btn" id="orbBtn" onclick="toggleListen()" title="Click to speak">🎤</button>
+</div>
+
+<!-- ── Waveform ── -->
+<div class="waveform" id="waveform">
+  <div class="wave-bar" id="b1"></div>
+  <div class="wave-bar" id="b2"></div>
+  <div class="wave-bar" id="b3"></div>
+  <div class="wave-bar" id="b4"></div>
+  <div class="wave-bar" id="b5"></div>
+  <div class="wave-bar" id="b6"></div>
+  <div class="wave-bar" id="b7"></div>
+  <div class="wave-bar" id="b8"></div>
+  <div class="wave-bar" id="b9"></div>
+  <div class="wave-bar" id="b10"></div>
+  <div class="wave-bar" id="b11"></div>
+  <div class="wave-bar" id="b12"></div>
+  <div class="wave-bar" id="b13"></div>
+  <div class="wave-bar" id="b14"></div>
+  <div class="wave-bar" id="b15"></div>
+  <div class="wave-bar" id="b16"></div>
+</div>
+
+<!-- ── Transcript ── -->
+<div class="section-label">You said</div>
+<div class="transcript-box" id="transcriptBox">Say something… or tap the mic above</div>
+
+<!-- ── Response ── -->
+<div class="section-label">ARIA says</div>
+<div class="response-box" id="responseBox"></div>
+
+<!-- ── Quick Commands ── -->
+<div class="section-label">Quick Commands</div>
+<div class="commands-grid">
+  <div class="cmd-chip" onclick="runCmd('Open YouTube')"><span>▶️</span> Open YouTube</div>
+  <div class="cmd-chip" onclick="runCmd('Open Google Maps')"><span>🗺️</span> Open Maps</div>
+  <div class="cmd-chip" onclick="runCmd('Search Google for latest news')"><span>🔍</span> Search News</div>
+  <div class="cmd-chip" onclick="runCmd('Open WhatsApp')"><span>💬</span> Open WhatsApp</div>
+  <div class="cmd-chip" onclick="runCmd('Open Gmail')"><span>📧</span> Open Gmail</div>
+  <div class="cmd-chip" onclick="runCmd('What time is it?')"><span>🕐</span> Current Time</div>
+  <div class="cmd-chip" onclick="runCmd('Open Spotify')"><span>🎵</span> Open Spotify</div>
+  <div class="cmd-chip" onclick="runCmd('Open Netflix')"><span>🎬</span> Open Netflix</div>
+  <div class="cmd-chip" onclick="runCmd('Search Wikipedia for artificial intelligence')"><span>📖</span> Wikipedia</div>
+  <div class="cmd-chip" onclick="runCmd('Open Google Translate')"><span>🌐</span> Translate</div>
+  <div class="cmd-chip" onclick="runCmd('Open Calculator')"><span>🔢</span> Calculator</div>
+  <div class="cmd-chip" onclick="runCmd('Open Google Calendar')"><span>📅</span> Calendar</div>
+</div>
+
+<!-- ── Log ── -->
+<div class="section-label">Action Log</div>
+<div class="action-log" id="actionLog">
+  <div class="log-entry"><span class="ts">00:00</span>ARIA initialized — waiting for command</div>
+</div>
+
+<div class="hint">Tap the mic · Speak · ARIA listens, thinks, and acts</div>
+
+<script>
+  // ─────────────────────────────────────────────
+  //  CONFIG
+  // ─────────────────────────────────────────────
+
+  const APP_URLS = {
+    youtube:    'https://youtube.com',
+    google:     'https://google.com',
+    maps:       'https://maps.google.com',
+    gmail:      'https://gmail.com',
+    whatsapp:   'https://web.whatsapp.com',
+    spotify:    'https://open.spotify.com',
+    twitter:    'https://twitter.com',
+    x:          'https://twitter.com',
+    instagram:  'https://instagram.com',
+    facebook:   'https://facebook.com',
+    netflix:    'https://netflix.com',
+    amazon:     'https://amazon.in',
+    flipkart:   'https://flipkart.com',
+    reddit:     'https://reddit.com',
+    github:     'https://github.com',
+    wikipedia:  'https://wikipedia.org',
+    news:       'https://news.google.com',
+    linkedin:   'https://linkedin.com',
+    zoom:       'https://zoom.us',
+    translate:  'https://translate.google.com',
+    calculator: 'https://www.google.com/search?q=calculator',
+    weather:    'https://weather.com',
+    calendar:   'https://calendar.google.com',
+    drive:      'https://drive.google.com',
+    docs:       'https://docs.google.com',
+    sheets:     'https://sheets.google.com',
+    meet:       'https://meet.google.com',
+  };
+
+  const SYSTEM_PROMPT = `You are ARIA, a smart AI voice assistant running in a web browser.
+
+The user gave a voice command. Analyze it and respond ONLY with a JSON object — no markdown, no explanation, just raw JSON.
+
+JSON format:
+{
+  "action": "open_url" | "search" | "answer" | "system_time" | "system_date" | "none",
+  "url": "full https:// URL if action is open_url or search",
+  "searchQuery": "the search query if action is search",
+  "response": "what ARIA says out loud (short, friendly, 1-2 sentences)",
+  "appName": "human-readable name of app/site if opening one"
+}
+
+Rules:
+- "open [app/website]" → action: open_url, provide the correct URL
+- "search for X" / "find X" / "look up X" → action: search, url = https://www.google.com/search?q=ENCODED_QUERY
+- "what time is it" / "current time" → action: system_time
+- "what is today's date" / "what day is it" → action: system_date
+- General knowledge questions → action: answer, give a helpful response
+- Always fill "response" with something friendly and brief to say out loud
+- URLs must be full absolute URLs starting with https://
+- For unknown apps, fall back to a Google search URL
+
+Supported apps: YouTube, Google, Maps, Gmail, WhatsApp, Spotify, Twitter/X, Instagram, Facebook, Netflix, Amazon, Flipkart, Reddit, GitHub, Wikipedia, LinkedIn, Zoom, Google Translate, Calculator, Weather, Google Calendar, Google Drive, Google Docs, Google Sheets, Google Meet`;
+
+  // ─────────────────────────────────────────────
+  //  STATE
+  // ─────────────────────────────────────────────
+
+  let recognition = null;
+  let isListening  = false;
+  let waveInterval = null;
+  let apiKey       = localStorage.getItem('aria_key') || '';
+  const synth      = window.speechSynthesis;
+
+  if (apiKey) document.getElementById('apiKeyInput').value = apiKey;
+
+  // ─────────────────────────────────────────────
+  //  API KEY
+  // ─────────────────────────────────────────────
+
+  function saveKey() {
+    apiKey = document.getElementById('apiKeyInput').value.trim();
+    if (!apiKey) { addLog('API key cannot be empty', 'error'); return; }
+    localStorage.setItem('aria_key', apiKey);
+    addLog('API key saved successfully', 'success');
+    setStatus('ready', 'key saved ✓');
+    setTimeout(() => setStatus('ready', 'ready'), 1500);
+  }
+
+  // ─────────────────────────────────────────────
+  //  UI HELPERS
+  // ─────────────────────────────────────────────
+
+  function setStatus(type, text) {
+    const pill = document.getElementById('statusPill');
+    const txt  = document.getElementById('statusText');
+    pill.className  = 'status-pill ' + type;
+    txt.textContent = text;
+  }
+
+  function addLog(msg, type = '') {
+    const log = document.getElementById('actionLog');
+    const now = new Date();
+    const ts  = String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+    const el  = document.createElement('div');
+    el.className = 'log-entry ' + type;
+    el.innerHTML = `<span class="ts">${ts}</span>${msg}`;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function showResponse(text) {
+    const box = document.getElementById('responseBox');
+    box.textContent = text;
+    box.classList.add('visible');
+  }
+
+  // ─────────────────────────────────────────────
+  //  WAVEFORM ANIMATION
+  // ─────────────────────────────────────────────
+
+  function animateWave(active) {
+    const bars = document.querySelectorAll('.wave-bar');
+    if (active) {
+      waveInterval = setInterval(() => {
+        bars.forEach(b => {
+          const h = Math.random() * 28 + 4;
+          b.style.height = h + 'px';
+          b.classList.add('active');
+        });
+      }, 90);
+    } else {
+      clearInterval(waveInterval);
+      bars.forEach(b => {
+        b.style.height = '4px';
+        b.classList.remove('active');
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  //  SPEECH RECOGNITION
+  // ─────────────────────────────────────────────
+
+  function setupRecognition() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      addLog('Speech recognition not supported in this browser. Use Chrome.', 'error');
+      return null;
+    }
+
+    const r = new SR();
+    r.continuous      = false;
+    r.interimResults  = true;
+    r.lang            = 'en-IN'; // Change to 'en-US' if preferred
+
+    r.onstart = () => {
+      setStatus('listening', 'listening...');
+      animateWave(true);
+      const tb = document.getElementById('transcriptBox');
+      tb.classList.add('active');
+      tb.textContent = '...';
+      addLog('Microphone activated', 'action');
+    };
+
+    r.onresult = (e) => {
+      let interim = '', final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      document.getElementById('transcriptBox').textContent = final || interim;
+      if (final) {
+        r.stop();
+        processCommand(final.trim());
+      }
+    };
+
+    r.onerror = (e) => {
+      setStatus('error', 'mic error: ' + e.error);
+      animateWave(false);
+      addLog('Microphone error: ' + e.error, 'error');
+      isListening = false;
+      document.getElementById('orbBtn').classList.remove('active');
+      document.getElementById('orbContainer').classList.remove('active');
+    };
+
+    r.onend = () => {
+      animateWave(false);
+      isListening = false;
+      document.getElementById('orbBtn').classList.remove('active');
+      document.getElementById('orbContainer').classList.remove('active');
+    };
+
+    return r;
+  }
+
+  function toggleListen() {
+    if (!apiKey) {
+      setStatus('error', 'no api key');
+      addLog('Please enter and save your Anthropic API key first', 'error');
+      document.getElementById('apiKeyInput').focus();
+      return;
+    }
+    if (isListening) {
+      recognition && recognition.stop();
+      isListening = false;
+      document.getElementById('orbBtn').classList.remove('active');
+      document.getElementById('orbContainer').classList.remove('active');
+      animateWave(false);
+      return;
+    }
+    recognition = setupRecognition();
+    if (!recognition) return;
+    isListening = true;
+    document.getElementById('orbBtn').classList.add('active');
+    document.getElementById('orbContainer').classList.add('active');
+    try {
+      recognition.start();
+    } catch (e) {
+      addLog('Could not start mic: ' + e.message, 'error');
+      isListening = false;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  //  CLAUDE API CALL
+  // ─────────────────────────────────────────────
+
+  async function processCommand(text) {
+    setStatus('thinking', 'thinking...');
+    addLog(`Command: "${text}"`, 'action');
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 500,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: text }]
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error?.message || 'API error ' + res.status);
+      }
+
+      const data = await res.json();
+      let raw = data.content[0].text.trim();
+      raw = raw.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(raw);
+
+      showResponse(parsed.response);
+      speak(parsed.response);
+      executeAction(parsed);
+
+    } catch (err) {
+      const errMsg = 'Sorry, something went wrong: ' + err.message;
+      showResponse(errMsg);
+      speak('Sorry, I had trouble processing that command.');
+      addLog('Error: ' + err.message, 'error');
+      setStatus('error', 'error');
+      setTimeout(() => setStatus('ready', 'ready'), 3000);
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  //  ACTION EXECUTOR
+  // ─────────────────────────────────────────────
+
+  function executeAction({ action, url, searchQuery, appName }) {
+    switch (action) {
+
+      case 'system_time': {
+        const now     = new Date();
+        const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+        showResponse('Current time: ' + timeStr);
+        speak('The time is ' + timeStr);
+        addLog('Time reported: ' + timeStr, 'success');
+        setStatus('ready', 'ready');
+        break;
+      }
+
+      case 'system_date': {
+        const now     = new Date();
+        const dateStr = now.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        showResponse('Today is ' + dateStr);
+        speak('Today is ' + dateStr);
+        addLog('Date reported: ' + dateStr, 'success');
+        setStatus('ready', 'ready');
+        break;
+      }
+
+      case 'open_url':
+        if (url) {
+          addLog('Opening: ' + (appName || url), 'success');
+          setTimeout(() => window.open(url, '_blank'), 600);
+          setStatus('ready', 'opened ✓');
+        } else {
+          addLog('No URL returned for open command', 'error');
+          setStatus('ready', 'ready');
+        }
+        break;
+
+      case 'search':
+        if (url) {
+          addLog('Searching: ' + (searchQuery || url), 'success');
+          setTimeout(() => window.open(url, '_blank'), 600);
+          setStatus('ready', 'searching ✓');
+        }
+        break;
+
+      case 'answer':
+        addLog('Question answered', 'success');
+        setStatus('ready', 'ready');
+        break;
+
+      default:
+        setStatus('ready', 'ready');
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  //  TEXT-TO-SPEECH
+  // ─────────────────────────────────────────────
+
+  function speak(text) {
+    if (!synth) return;
+    synth.cancel();
+    const utt   = new SpeechSynthesisUtterance(text);
+    utt.rate    = 1.0;
+    utt.pitch   = 1.0;
+    utt.volume  = 1.0;
+    utt.lang    = 'en-IN';
+    utt.onstart = () => setStatus('speaking', 'speaking...');
+    utt.onend   = () => setStatus('ready', 'ready');
+    synth.speak(utt);
+  }
+
+  // ─────────────────────────────────────────────
+  //  QUICK COMMAND CHIPS
+  // ─────────────────────────────────────────────
+
+  function runCmd(cmd) {
+    if (!apiKey) {
+      addLog('No API key — please save your key first', 'error');
+      setStatus('error', 'no api key');
+      document.getElementById('apiKeyInput').focus();
+      return;
+    }
+    const tb = document.getElementById('transcriptBox');
+    tb.textContent = cmd;
+    tb.classList.add('active');
+    processCommand(cmd);
+  }
+
+  // ─────────────────────────────────────────────
+  //  KEYBOARD SHORTCUT: Space to toggle mic
+  // ─────────────────────────────────────────────
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && e.target === document.body) {
+      e.preventDefault();
+      toggleListen();
+    }
+  });
+</script>
+
+</body>
+</html>
